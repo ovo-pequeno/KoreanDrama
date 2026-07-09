@@ -1,0 +1,48 @@
+name: daily-kdrama-long
+
+on:
+  schedule:
+    # 韓国ドラマ会話劇 長尺（gTTS ko）。1日1本（:00回避）。JST 翌6:38ごろ
+    - cron: "38 21 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-kdrama-long
+  cancel-in-progress: false
+
+jobs:
+  generate-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg imagemagick fonts-noto-cjk
+          sudo sed -i 's/<policy domain="path" rights="none" pattern="@\*"\/>//' /etc/ImageMagick-6/policy.xml || true
+          sudo sed -i 's/<policy domain="path" rights="none" pattern="@\*"\/>//' /etc/ImageMagick-7/policy.xml || true
+      - name: Install python deps
+        run: pip install -r requirements.txt
+      - name: Generate and upload
+        env:
+          GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
+          YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          PRIVACY: "public"
+          NUM_SCENES: "10"
+        run: python generate_kdrama_long.py
+      - name: Commit dedup log
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add used_log_kdrama_long.json
+          git commit -m "update dedup log [skip ci]" || echo "no changes"
+          git pull --rebase origin main
+          git push
